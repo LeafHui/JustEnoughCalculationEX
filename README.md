@@ -121,6 +121,6 @@ Uses `ILateMixinLoader` because the mixin targets JEC GUI classes. All GTCEu acc
 
 ## 许可证 / License
 
-暂未随仓库提供许可证文件。在补充许可证前，默认保留所有权利（GitHub 仓库初始状态）。
+本项目使用 [MIT License](LICENSE)。
 
-No license file is included yet; all rights are reserved until a license is added.
+This project is licensed under the [MIT License](LICENSE).
