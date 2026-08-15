@@ -1,0 +1,20 @@
+# Gradle / 构建产物
+.gradle/
+build/
+run/
+build-log.txt
+*.log
+
+# IDE
+.idea/
+*.iml
+.vscode/
+out/
+bin/
+
+# 系统文件
+Thumbs.db
+.DS_Store
+
+# 本地参考源码（第三方项目，不提交）
+References/

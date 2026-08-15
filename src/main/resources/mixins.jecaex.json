@@ -1,0 +1,13 @@
+{
+  "package": "dev.jecaex.mixin",
+  "refmap": "mixins.jecaex.refmap.json",
+  "target": "@env(DEFAULT)",
+  "minVersion": "0.8",
+  "compatibilityLevel": "JAVA_8",
+  "mixins": [],
+  "client": [
+    "GuiRecipeMixin",
+    "GuiCraftMixin"
+  ],
+  "server": []
+}
