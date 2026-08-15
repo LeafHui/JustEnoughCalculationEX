@@ -8,7 +8,7 @@
 **This project was designed, coded and debugged with AI (LLM) assistance.**
 
 - **modid**: `jecaex`
-- **当前版本 / Version**: `0.2.1`
+- **当前版本 / Version**: `0.2.2`
 - **平台 / Platform**: Minecraft `1.12.2` Forge
 
 ---
@@ -82,11 +82,11 @@ Linux/macOS:
 ./gradlew build --no-daemon
 ```
 
-产物位于 `build/libs/jecaex-0.2.1.jar`。
+产物位于 `build/libs/Just Enough Calculation EX-0.2.2.jar`。
 
 > 注意：mixin 注解处理器会向 stderr 输出信息，PowerShell 可能显示非零 exit code；只要日志中出现 `BUILD SUCCESSFUL` 即构建成功。
 
-The output jar is at `build/libs/jecaex-0.2.1.jar`. On Windows, the mixin annotation processor may write notes to stderr and PowerShell can show a non-zero exit code — **`BUILD SUCCESSFUL` in the log is the source of truth**.
+The output jar is at `build/libs/Just Enough Calculation EX-0.2.2.jar`. On Windows, the mixin annotation processor may write notes to stderr and PowerShell can show a non-zero exit code — **`BUILD SUCCESSFUL` in the log is the source of truth**.
 
 ---
 

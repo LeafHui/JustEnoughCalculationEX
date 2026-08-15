@@ -2,7 +2,7 @@
 
 **A quality-of-life addon for [Just Enough Calculation](https://www.curseforge.com/minecraft/mc-mods/just-enough-calculation) in GregTech CEu packs.**
 
-Minecraft **1.12.2** | Forge | Version **0.2.1** | MIT License
+Minecraft **1.12.2** | Forge | Version **0.2.2** | MIT License
 
 > **Transparency note:** this project was developed with AI assistance (design, coding, and debugging).
 
