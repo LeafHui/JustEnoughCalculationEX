@@ -121,6 +121,8 @@ Uses `ILateMixinLoader` because the mixin targets JEC GUI classes. All GTCEu acc
 
 ## 许可证 / License
 
-本项目使用 [MIT License](LICENSE)。
+本项目采用 [GNU Lesser General Public License v3.0（LGPL-3.0）](LICENSE)。
 
-This project is licensed under the [MIT License](LICENSE).
+原因：项目中的 GT 配方导入辅助逻辑部分改编自同样使用 LGPL-3.0 的 [Just Enough Calculation](https://www.curseforge.com/minecraft/mc-mods/just-enough-calculation)，因此本项目整体以 LGPL-3.0 发布。JEC 不被打包进本模组 jar，用户需单独安装。详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+This project is licensed under the [GNU Lesser General Public License v3.0 (LGPL-3.0)](LICENSE), because parts of the GT recipe transfer helper are adapted from Just Enough Calculation, which is also LGPL-3.0. JEC is not bundled in this mod's jar and must be installed separately. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

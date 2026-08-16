@@ -2,7 +2,7 @@
 
 **A full-screen crafting tree addon for [Just Enough Calculation](https://www.curseforge.com/minecraft/mc-mods/just-enough-calculation), with optional GregTech CEu recipe-import compatibility.**
 
-Minecraft **1.12.2** | Forge | Version **0.2.2** | MIT License
+Minecraft **1.12.2** | Forge | Version **0.2.2** | GNU LGPL-3.0
 
 > **Transparency note:** this project was developed with AI assistance (design, coding, and debugging).
 
@@ -91,10 +91,12 @@ Without GregTech, this mod still loads normally and the Crafting Tree remains fu
 - Uses an **ILateMixinLoader** because the mixin targets JEC GUI classes.
 - GregTech CEu is accessed through **reflection**, with no compile-time dependency and no hard runtime requirement.
 - The crafting tree design is inspired by EMI's `BoMScreen`.
+- JEC is LGPL-3.0 licensed and is installed separately; this mod does not bundle JEC.
 
 ---
 
 ## Source and license
 
 - GitHub: [LeafHui/JustEnoughCalculationEX](https://github.com/LeafHui/JustEnoughCalculationEX)
-- License: [MIT](https://github.com/LeafHui/JustEnoughCalculationEX/blob/main/LICENSE)
+- License: [GNU LGPL-3.0](https://github.com/LeafHui/JustEnoughCalculationEX/blob/main/LICENSE)
+- Third-party notices: [THIRD_PARTY_NOTICES.md](https://github.com/LeafHui/JustEnoughCalculationEX/blob/main/THIRD_PARTY_NOTICES.md)
