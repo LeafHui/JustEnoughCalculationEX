@@ -259,8 +259,8 @@ public class GuiCraftTree extends Screen {
         graphics.pose().pushPose();
         graphics.pose().scale(AMOUNT_SCALE, AMOUNT_SCALE, 1);
         int tw = font.width(s);
-        int wx = Math.round((x + ICON - 1) / AMOUNT_SCALE - tw);
-        int wy = Math.round((y + ICON - 1) / AMOUNT_SCALE - 8);
+        int wx = Math.round((x + ICON - 2) / AMOUNT_SCALE - tw);
+        int wy = Math.round((y + ICON - 3) / AMOUNT_SCALE - 8);
         graphics.drawString(font, s, wx, wy, 0xFFFFFFFF, true);
         graphics.pose().popPose();
     }
