@@ -31,7 +31,9 @@ public abstract class GuiCraftMixin {
     @Inject(method = "<init>(Lnet/minecraft/world/item/ItemStack;I)V", at = @At("TAIL"), remap = false)
     private void jecaex$addCraftingTreeButton(CallbackInfo ci) {
         GuiCraft self = (GuiCraft) (Object) this;
-        WButton tree = new WButtonIcon(85, 62, 20, 20, Resource.BTN_LIST,
+        Resource.ResourceGroup treeIcon = new Resource.ResourceGroup(
+                Resource.ICN_STACK_N, Resource.ICN_STACK_F);
+        WButton tree = new WButtonIcon(83, 62, 20, 20, treeIcon,
                 "jecalculation.gui.craft.tree");
         tree.setListener(i -> {
             ILabel target = label.getLabel();

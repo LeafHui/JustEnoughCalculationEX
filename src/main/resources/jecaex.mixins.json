@@ -5,7 +5,8 @@
   "compatibilityLevel": "JAVA_17",
   "refmap": "jecaex.refmap.json",
   "client": [
-    "GuiCraftMixin"
+    "GuiCraftMixin",
+    "JecaJeiTransferMixin"
   ],
   "injectors": {
     "defaultRequire": 1

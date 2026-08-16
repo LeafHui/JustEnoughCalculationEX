@@ -13,6 +13,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
@@ -231,10 +232,12 @@ public class GuiCraftTree extends Screen {
     private void renderLabel(GuiGraphics graphics, ILabel label, int x, int y, boolean showAmount) {
         Object rep = cachedRep(label);
         if (rep instanceof ItemStack stack) {
+            RenderSystem.enableDepthTest();
             graphics.pose().pushPose();
             graphics.pose().translate(0, 0, 100);
             graphics.renderItem(stack, x, y);
             graphics.pose().popPose();
+            RenderSystem.disableDepthTest();
             if (showAmount) {
                 String s = label.getAmountString(true);
                 if (!s.isEmpty()) {
