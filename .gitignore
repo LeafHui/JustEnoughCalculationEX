@@ -21,3 +21,5 @@ References/
 
 # 本地 AI 交接文档（仅本地保留，不公开）
 AI_HANDOFF.md
+effect/
+dist/

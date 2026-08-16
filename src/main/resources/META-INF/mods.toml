@@ -1,0 +1,33 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="${mod_license}"
+issueTrackerURL="https://github.com/LeafHui/JustEnoughCalculationEX/issues"
+
+[[mods]]
+modId="${mod_id}"
+version="${mod_version}"
+displayName="${mod_name}"
+displayURL="${mod_url}"
+authors="LeafHui"
+description="${mod_description}"
+
+[[dependencies.${mod_id}]]
+    modId="jecalculation"
+    mandatory=true
+    versionRange="[4.0.4,)"
+    ordering="AFTER"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="jei"
+    mandatory=true
+    versionRange="[15.2.0.27,)"
+    ordering="BEFORE"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="architectury"
+    mandatory=true
+    versionRange="[9.1.12,)"
+    ordering="AFTER"
+    side="BOTH"

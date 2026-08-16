@@ -54,7 +54,6 @@ public final class RecipeTree {
         int nodes;
 
         TreeNode build(ILabel target, int depth, List<ILabel> ancestors) {
-            // Cycle detection: if the target already appears higher in the chain, stop.
             for (ILabel ancestor : ancestors) {
                 if (target.matches(ancestor)) {
                     return leaf(target, depth);
@@ -64,10 +63,7 @@ public final class RecipeTree {
                 return leaf(target, depth);
             }
 
-            // JEC matches recipes against "required" labels, i.e. labels with a negative amount
-            // (a positive amount never matches an ore-dictionary output because LOreDict#mergeFuzzy
-            // requires opposite signs). Negate only for matching/amount computation; the tree keeps
-            // the positive amount for display.
+            // JEC matches ore-dictionary outputs against negative ("required") labels.
             ILabel request = target.copy().multiply(-1);
             Recipe recipe = findRecipe(request);
             if (recipe == null) {
@@ -76,6 +72,9 @@ public final class RecipeTree {
 
             nodes++;
             long multiplier = recipe.multiplier(request);
+            if (multiplier <= 0) {
+                multiplier = 1;
+            }
 
             List<ILabel> catalysts = nonEmpty(recipe.getLabel(Recipe.IO.CATALYST));
             List<ILabel> inputs = new ArrayList<>();
@@ -106,7 +105,7 @@ public final class RecipeTree {
                     .orElse(null);
         }
 
-        static List<ILabel> nonEmpty(ILabel[] labels) {
+        static List<ILabel> nonEmpty(List<ILabel> labels) {
             List<ILabel> ret = new ArrayList<>();
             for (ILabel l : labels) {
                 if (l != ILabel.EMPTY) {

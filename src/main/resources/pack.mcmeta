@@ -1,6 +1,6 @@
 {
-   "pack":{
-      "pack_format":3,
-      "description":"JECa EX Resources"
-   }
+  "pack": {
+    "description": "Just Enough Calculation EX resources",
+    "pack_format": 15
+  }
 }

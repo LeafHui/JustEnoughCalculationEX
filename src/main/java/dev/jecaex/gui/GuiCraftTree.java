@@ -1,39 +1,33 @@
 package dev.jecaex.gui;
 
-import dev.jecaex.JecaExMod;
-import me.towdium.jecalculation.data.Controller;
+import dev.architectury.fluid.FluidStack;
+import dev.architectury.hooks.fluid.FluidStackHooks;
 import me.towdium.jecalculation.data.label.ILabel;
+import me.towdium.jecalculation.data.structure.CostList;
 import me.towdium.jecalculation.data.structure.Recipe;
-import me.towdium.jecalculation.data.structure.RecordCraft;
+import me.towdium.jecalculation.compat.ModCompat;
 import me.towdium.jecalculation.gui.JecaGui;
 import me.towdium.jecalculation.gui.guis.GuiRecipe;
-import me.towdium.jecalculation.jei.JecaPlugin;
-import mezz.jei.api.recipe.IFocus;
+import me.towdium.jecalculation.utils.wrappers.Trio;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiButton;
-import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.renderer.GlStateManager;
-import net.minecraft.client.renderer.RenderHelper;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
-import net.minecraft.client.renderer.texture.TextureMap;
-import net.minecraft.client.resources.I18n;
-import net.minecraft.item.ItemStack;
-import net.minecraftforge.fluids.FluidStack;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
-import org.lwjgl.input.Keyboard;
-import org.lwjgl.input.Mouse;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
+import org.lwjgl.glfw.GLFW;
 
-import java.io.IOException;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
- * Full-screen crafting-tree view (Bill of Materials style).
+ * Full-screen crafting-tree view (Bill of Materials style) for JEC 1.20.1.
  *
  * <p>The target is the root at the top. Every recipe is a horizontal card containing its
  * catalysts (purple, left) and its inputs (right). Craftable inputs are green, raw materials are
@@ -41,8 +35,7 @@ import java.util.Map;
  * target). The view can be panned and zoomed, and a total raw-material summary is shown at the
  * bottom.</p>
  */
-@SideOnly(Side.CLIENT)
-public class GuiCraftTree extends GuiScreen {
+public class GuiCraftTree extends Screen {
 
     private static final int ICON = 16;
     private static final int STEP = 17;
@@ -53,7 +46,6 @@ public class GuiCraftTree extends GuiScreen {
     private static final int V_SPACING = 28;
     private static final int H_SPACING = 6;
     private static final float AMOUNT_SCALE = 2f / 3f;
-    private static final int BTN_CATALYSTS = 0;
 
     private static final int OUTPUT_COLOR = 0x663B82F6; // blue
     private static final int LEAF_COLOR = 0x66C0392B; // red
@@ -62,7 +54,7 @@ public class GuiCraftTree extends GuiScreen {
     private static final int BORDER_COLOR = 0xFFFFFFFF;
     private static final int LINE_COLOR = 0xFFA0A0A0;
 
-    private final GuiScreen old;
+    private final JecaGui parent;
     private final boolean empty;
 
     private final List<Card> cards = new ArrayList<>();
@@ -72,25 +64,29 @@ public class GuiCraftTree extends GuiScreen {
 
     private ILabel rootTarget;
     private boolean rootLeaf;
-    private int rootTargetX, rootTargetY;
+    private int rootTargetX;
+    private int rootTargetY;
     private final List<ILabel> rawMaterials = new ArrayList<>();
     private final Map<ILabel, Object> repCache = new HashMap<>();
     private String summaryTitle;
-    private int summaryTitleX, summaryTitleY;
+    private int summaryTitleX;
+    private int summaryTitleY;
 
-    private double offX, offY;
+    private double offX;
+    private double offY;
     private float scale = 1.0f;
     private boolean dragging;
-    private int lastMouseX, lastMouseY;
+    private double lastMouseX;
+    private double lastMouseY;
 
     private boolean showCatalysts = true;
+    private Button catalystButton;
     private RecipeTree.TreeNode root;
-    private GuiButton catalystButton;
 
-    public GuiCraftTree(GuiScreen old) {
-        this.old = old;
-        ILabel target = getTarget();
-        this.empty = target == ILabel.EMPTY;
+    public GuiCraftTree(JecaGui parent, ILabel target) {
+        super(Component.translatable("jecalculation.gui.craft.tree"));
+        this.parent = parent;
+        this.empty = target == null || target == ILabel.EMPTY;
         if (!empty) {
             RecipeTree tree = RecipeTree.build(target);
             this.root = tree.root;
@@ -101,6 +97,333 @@ public class GuiCraftTree extends GuiScreen {
             rebuildLayout();
         }
     }
+
+    @Override
+    protected void init() {
+        clearWidgets();
+        offY = -height / 3.0;
+        layoutRawMaterials();
+        addCatalystButton();
+    }
+
+    private void addCatalystButton() {
+        if (empty) {
+            return;
+        }
+        String key = showCatalysts
+                ? "jecaex.gui.tree.hide_catalysts"
+                : "jecaex.gui.tree.show_catalysts";
+        Component text = Component.translatable(key);
+        int w = font.width(text) + 12;
+        catalystButton = Button.builder(text, b -> toggleCatalysts())
+                .bounds(width - w - 4, 4, w, 20)
+                .build();
+        addRenderableWidget(catalystButton);
+    }
+
+    private void toggleCatalysts() {
+        showCatalysts = !showCatalysts;
+        rebuildLayout();
+        offX = 0;
+        offY = -height / 3.0;
+        clearWidgets();
+        addCatalystButton();
+    }
+
+    @Override
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        renderBackground(graphics);
+        if (empty) {
+            graphics.drawCenteredString(font, Component.translatable("jecaex.gui.tree.empty"),
+                    width / 2, height / 2 - 10, 0xFFFFFF);
+            super.render(graphics, mouseX, mouseY, partialTick);
+            return;
+        }
+
+        var pose = graphics.pose();
+        pose.pushPose();
+        pose.translate(width / 2.0, height / 2.0, 0);
+        pose.scale(scale, scale, 1);
+        pose.translate(offX, offY, 0);
+
+        for (Segment s : lines) {
+            drawLine(graphics, s.x1, s.y1, s.x2, s.y2);
+        }
+
+        if (rootTarget != null) {
+            int targetColor = rootLeaf ? LEAF_COLOR : OUTPUT_COLOR;
+            graphics.fill(rootTargetX - 10, rootTargetY - 9, rootTargetX + 10, rootTargetY + 9, targetColor);
+            renderLabel(graphics, rootTarget, rootTargetX - ICON / 2, rootTargetY - ICON / 2, true);
+            if (!cards.isEmpty()) {
+                Card rootCard = cards.get(0);
+                drawLine(graphics, rootTargetX, rootTargetY + 9, rootTargetX, rootCard.y - 9);
+            }
+        }
+
+        int viewTop = (int) (-height / 2.0 / scale - offY) - 40;
+        int viewBottom = (int) (height / 2.0 / scale - offY) + 40;
+        for (Card c : cards) {
+            if (c.y < viewTop || c.y > viewBottom) {
+                continue;
+            }
+            if (c.catW > 0) {
+                for (int i = 0; i < c.data.catalysts.size(); i++) {
+                    int cx = c.x + c.catLeft + PAD + i * STEP;
+                    graphics.fill(cx, c.y - 9, cx + ICON, c.y + 9, CATALYST_COLOR);
+                    renderLabel(graphics, c.data.catalysts.get(i), cx, c.y - ICON / 2, false);
+                }
+            }
+            if (c.inW > 0) {
+                for (int i = 0; i < c.data.inputs.size(); i++) {
+                    int ix = c.x + c.inLeft + PAD + i * STEP;
+                    int color = c.data.children.get(i).leaf ? LEAF_COLOR : INPUT_COLOR;
+                    graphics.fill(ix, c.y - 9, ix + ICON, c.y + 9, color);
+                    renderLabel(graphics, c.data.inputs.get(i), ix, c.y - ICON / 2, true);
+                }
+            }
+
+            int left = c.x - c.halfW;
+            int right = left + c.totalW;
+            graphics.fill(left, c.y - 10, right, c.y - 9, BORDER_COLOR);
+            graphics.fill(left, c.y + 9, right, c.y + 10, BORDER_COLOR);
+            graphics.fill(left, c.y - 10, left + 1, c.y + 10, BORDER_COLOR);
+            graphics.fill(right - 1, c.y - 10, right, c.y + 10, BORDER_COLOR);
+        }
+        pose.popPose();
+
+        // Raw material summary (screen space).
+        if (!screenHits.isEmpty()) {
+            graphics.drawString(font, summaryTitle, summaryTitleX, summaryTitleY + 4, 0xFFCCCCCC);
+            for (Hit h : screenHits) {
+                renderLabel(graphics, h.label, h.x, h.y, true);
+            }
+        }
+
+        super.render(graphics, mouseX, mouseY, partialTick);
+
+        // Tooltips.
+        for (Hit h : screenHits) {
+            if (mouseX >= h.x && mouseX < h.x + ICON && mouseY >= h.y && mouseY < h.y + ICON) {
+                renderHitTooltip(graphics, h, mouseX, mouseY);
+                return;
+            }
+ 
+        }
+        int wx = worldX(mouseX);
+        int wy = worldY(mouseY);
+        for (Hit h : hits) {
+            if (wx >= h.x && wx < h.x + ICON && wy >= h.y && wy < h.y + ICON) {
+                renderHitTooltip(graphics, h, mouseX, mouseY);
+                break;
+            }
+        }
+    }
+
+    private void renderHitTooltip(GuiGraphics graphics, Hit h, int mouseX, int mouseY) {
+        List<Component> tip = new ArrayList<>();
+        tip.add(Component.literal(h.label.getDisplayName()));
+        List<String> raw = new ArrayList<>();
+        h.label.getToolTip(raw, true);
+        raw.forEach(s -> tip.add(Component.literal(s)));
+        graphics.renderTooltip(font, tip, Optional.empty(), mouseX, mouseY);
+    }
+
+    private void renderLabel(GuiGraphics graphics, ILabel label, int x, int y, boolean showAmount) {
+        Object rep = cachedRep(label);
+        if (rep instanceof ItemStack stack) {
+            graphics.pose().pushPose();
+            graphics.pose().translate(0, 0, 100);
+            graphics.renderItem(stack, x, y);
+            graphics.pose().popPose();
+            if (showAmount) {
+                String s = label.getAmountString(true);
+                if (!s.isEmpty()) {
+                    drawAmount(graphics, s, x, y);
+                }
+            }
+        } else if (rep instanceof FluidStack fluid) {
+            renderFluid(graphics, fluid, x, y);
+            if (showAmount) {
+                String s = label.getAmountString(true);
+                if (!s.isEmpty()) {
+                    drawAmount(graphics, s, x, y);
+                }
+            }
+        }
+    }
+
+    private void drawAmount(GuiGraphics graphics, String s, int x, int y) {
+        graphics.pose().pushPose();
+        graphics.pose().scale(AMOUNT_SCALE, AMOUNT_SCALE, 1);
+        int tw = font.width(s);
+        int wx = Math.round((x + ICON - 1) / AMOUNT_SCALE - tw);
+        int wy = Math.round((y + ICON - 1) / AMOUNT_SCALE - 8);
+        graphics.drawString(font, s, wx, wy, 0xFFFFFFFF, true);
+        graphics.pose().popPose();
+    }
+
+    private Object cachedRep(ILabel label) {
+        Object rep = repCache.get(label);
+        if (rep == null && !repCache.containsKey(label)) {
+            rep = label.getRepresentation();
+            repCache.put(label, rep);
+        }
+        return rep;
+    }
+
+    private void renderFluid(GuiGraphics graphics, FluidStack fluid, int x, int y) {
+        TextureAtlasSprite tex = FluidStackHooks.getStillTexture(fluid.getFluid());
+        if (tex == null) {
+            return;
+        }
+        int c = FluidStackHooks.getColor(fluid.getFluid());
+        float r = (c >> 16 & 255) / 255f;
+        float g = (c >> 8 & 255) / 255f;
+        float b = (c & 255) / 255f;
+        graphics.pose().pushPose();
+        graphics.pose().translate(0, 0, 100);
+        graphics.setColor(r, g, b, 1f);
+        graphics.blit(x, y, 0, ICON, ICON, tex);
+        graphics.setColor(1f, 1f, 1f, 1f);
+        graphics.pose().popPose();
+    }
+
+    private void drawLine(GuiGraphics graphics, int x1, int y1, int x2, int y2) {
+        if (x1 == x2) {
+            graphics.fill(x1, Math.min(y1, y2), x1 + 1, Math.max(y1, y2), LINE_COLOR);
+        } else {
+            graphics.fill(Math.min(x1, x2), y1, Math.max(x1, x2), y1 + 1, LINE_COLOR);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Interaction
+    // ------------------------------------------------------------------
+
+    private int worldX(double screenX) {
+        return (int) ((screenX - width / 2.0) / scale - offX);
+    }
+
+    private int worldY(double screenY) {
+        return (int) ((screenY - height / 2.0) / scale - offY);
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == 0 && (catalystButton == null || !catalystButton.isMouseOver(mouseX, mouseY))) {
+            boolean shift = hasShiftDown();
+            for (Hit h : screenHits) {
+                if (mouseX >= h.x && mouseX < h.x + ICON && mouseY >= h.y && mouseY < h.y + ICON) {
+                    showRecipe(h.label);
+                    return true;
+                }
+            }
+            int wx = worldX(mouseX);
+            int wy = worldY(mouseY);
+            for (Hit h : hits) {
+                if (wx >= h.x && wx < h.x + ICON && wy >= h.y && wy < h.y + ICON) {
+                    if (shift && h.recipe != null) {
+                        openRecipeEditor(h.recipe);
+                    } else {
+                        showRecipe(h.label);
+                    }
+                    return true;
+                }
+            }
+            dragging = true;
+            lastMouseX = mouseX;
+            lastMouseY = mouseY;
+            return true;
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (dragging) {
+            offX += (mouseX - lastMouseX) / scale;
+            offY += (mouseY - lastMouseY) / scale;
+            lastMouseX = mouseX;
+            lastMouseY = mouseY;
+            return true;
+        }
+        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        dragging = false;
+        return super.mouseReleased(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        if (delta != 0) {
+            scale = Math.max(0.4f, Math.min(3.0f, (float) (scale * (delta > 0 ? 1.1 : 0.9))));
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, delta);
+    }
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+            if (parent != null) {
+                Minecraft.getInstance().setScreen(parent);
+            } else {
+                onClose();
+            }
+            return true;
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    @Override
+    public boolean isPauseScreen() {
+        return false;
+    }
+
+    // ------------------------------------------------------------------
+    // JEC integration
+    // ------------------------------------------------------------------
+
+    private void openRecipeEditor(Recipe recipe) {
+        GuiRecipe gui = new GuiRecipe();
+        gui.transfer(convertRecipe(recipe), GuiRecipe.class);
+        JecaGui.displayGui(gui, parent);
+    }
+
+    private EnumMap<Recipe.IO, List<Trio<ILabel, CostList, CostList>>> convertRecipe(Recipe recipe) {
+        EnumMap<Recipe.IO, List<Trio<ILabel, CostList, CostList>>> ret = new EnumMap<>(Recipe.IO.class);
+        putLabels(ret, Recipe.IO.INPUT, recipe.getLabel(Recipe.IO.INPUT));
+        putLabels(ret, Recipe.IO.CATALYST, recipe.getLabel(Recipe.IO.CATALYST));
+        putLabels(ret, Recipe.IO.OUTPUT, recipe.getLabel(Recipe.IO.OUTPUT));
+        return ret;
+    }
+
+    private void putLabels(EnumMap<Recipe.IO, List<Trio<ILabel, CostList, CostList>>> map,
+                           Recipe.IO io, List<ILabel> labels) {
+        List<Trio<ILabel, CostList, CostList>> list = new ArrayList<>();
+        for (ILabel label : labels) {
+            if (label == ILabel.EMPTY) {
+                continue;
+            }
+            ILabel copy = label.copy();
+            CostList cost = new CostList(List.of(copy));
+            list.add(new Trio<>(copy, cost, cost));
+        }
+        if (!list.isEmpty()) {
+            map.put(io, list);
+        }
+    }
+
+    private void showRecipe(ILabel label) {
+        ModCompat.showRecipe(label);
+    }
+
+    // ------------------------------------------------------------------
+    // Layout
+    // ------------------------------------------------------------------
 
     private void rebuildLayout() {
         cards.clear();
@@ -126,7 +449,6 @@ public class GuiCraftTree extends GuiScreen {
         } else {
             rootTargetX = 0;
         }
-        // Shift cards down one level so the root target sits above them.
         for (Card c : cards) {
             c.y += V_SPACING;
         }
@@ -140,55 +462,17 @@ public class GuiCraftTree extends GuiScreen {
         rootTargetY = 0;
     }
 
-    @Override
-    public void initGui() {
-        offY = -height / 3.0;
-        layoutRawMaterials();
-        addCatalystButton();
-    }
-
-    private void addCatalystButton() {
-        if (empty) {
-            return;
-        }
-        String text = I18n.format(showCatalysts
-                ? "jecaex.gui.tree.hide_catalysts"
-                : "jecaex.gui.tree.show_catalysts");
-        int w = fontRenderer.getStringWidth(text) + 12;
-        catalystButton = new GuiButton(BTN_CATALYSTS, width - w - 4, 4, w, 20, text);
-        buttonList.add(catalystButton);
-    }
-
-    @Override
-    protected void actionPerformed(GuiButton button) throws IOException {
-        if (button.id == BTN_CATALYSTS) {
-            showCatalysts = !showCatalysts;
-            rebuildLayout();
-            offX = 0;
-            offY = -height / 3.0;
-            buttonList.clear();
-            addCatalystButton();
-            return;
-        }
-        super.actionPerformed(button);
-    }
-
-    private boolean isOverCatalystButton(int mouseX, int mouseY) {
-        GuiButton b = catalystButton;
-        return b != null && mouseX >= b.x && mouseX < b.x + b.width
-                && mouseY >= b.y && mouseY < b.y + b.height;
-    }
-
-    // ------------------------------------------------------------------
-    // Layout
-    // ------------------------------------------------------------------
-
     private static class Card {
         final RecipeTree.TreeNode data;
-        int x, y;
+        int x;
+        int y;
         Card parent;
-        int halfW, totalW;
-        int catLeft, catW, inLeft, inW;
+        int halfW;
+        int totalW;
+        int catLeft;
+        int catW;
+        int inLeft;
+        int inW;
         int[] inputX;
 
         Card(RecipeTree.TreeNode data, int x, int y, boolean showCatalysts) {
@@ -211,7 +495,10 @@ public class GuiCraftTree extends GuiScreen {
     }
 
     private static class Segment {
-        int x1, y1, x2, y2;
+        int x1;
+        int y1;
+        int x2;
+        int y2;
 
         Segment(int x1, int y1, int x2, int y2) {
             this.x1 = x1;
@@ -224,7 +511,8 @@ public class GuiCraftTree extends GuiScreen {
     private static class Hit {
         final ILabel label;
         final Recipe recipe;
-        int x, y;
+        int x;
+        int y;
 
         Hit(ILabel label, int x, int y) {
             this(label, null, x, y);
@@ -307,7 +595,7 @@ public class GuiCraftTree extends GuiScreen {
 
     private TreeVolume layout(RecipeTree.TreeNode node, int depth) {
         if (node.leaf) {
-            return null; // raw material: rendered as a red input in its parent's card.
+            return null;
         }
         TreeVolume result = null;
         for (RecipeTree.TreeNode child : node.children) {
@@ -335,21 +623,18 @@ public class GuiCraftTree extends GuiScreen {
 
     private void registerCard(Card c) {
         cards.add(c);
-        // Catalysts.
         if (c.catW > 0) {
             for (int i = 0; i < c.data.catalysts.size(); i++) {
-                hits.add(new Hit(c.data.catalysts.get(i), c.data.recipe, c.x + c.catLeft + PAD + i * STEP,
-                        c.y - ICON / 2));
+                hits.add(new Hit(c.data.catalysts.get(i), c.data.recipe,
+                        c.x + c.catLeft + PAD + i * STEP, c.y - ICON / 2));
             }
         }
-        // Inputs.
         if (c.inW > 0) {
             for (int i = 0; i < c.data.inputs.size(); i++) {
-                hits.add(new Hit(c.data.inputs.get(i), c.data.recipe, c.x + c.inLeft + PAD + i * STEP,
-                        c.y - ICON / 2));
+                hits.add(new Hit(c.data.inputs.get(i), c.data.recipe,
+                        c.x + c.inLeft + PAD + i * STEP, c.y - ICON / 2));
             }
         }
-        // Connector from parent input to this card.
         if (c.parent != null) {
             int idx = c.parent.data.children.indexOf(c.data);
             if (idx >= 0) {
@@ -400,8 +685,8 @@ public class GuiCraftTree extends GuiScreen {
                 items.add(m);
             }
         }
-        summaryTitle = I18n.format("jecaex.gui.tree.total");
-        int titleW = fontRenderer.getStringWidth(summaryTitle);
+        summaryTitle = Component.translatable("jecaex.gui.tree.total").getString();
+        int titleW = font.width(summaryTitle);
         int totalW = titleW + 8 + fluids.size() * FLUID_STEP + 12 + items.size() * ITEM_STEP;
         int sx = Math.max(4, (width - totalW) / 2);
         summaryTitleX = sx;
@@ -418,300 +703,5 @@ public class GuiCraftTree extends GuiScreen {
             screenHits.add(new Hit(it, x, summaryTitleY));
             x += ITEM_STEP;
         }
-    }
-
-    // ------------------------------------------------------------------
-    // Rendering
-    // ------------------------------------------------------------------
-
-    @Override
-    public void drawScreen(int mouseX, int mouseY, float partialTicks) {
-        drawDefaultBackground();
-        if (empty) {
-            drawCenteredString(fontRenderer, I18n.format("jecaex.gui.tree.empty"), width / 2, height / 2 - 10, 0xFFFFFF);
-            return;
-        }
-
-        GlStateManager.pushMatrix();
-        GlStateManager.translate(width / 2, height / 2, 0);
-        GlStateManager.scale(scale, scale, 1);
-        GlStateManager.translate(offX, offY, 0);
-
-        for (Segment s : lines) {
-            drawLine(s.x1, s.y1, s.x2, s.y2);
-        }
-
-        // Root target.
-        if (rootTarget != null) {
-            int targetColor = rootLeaf ? LEAF_COLOR : OUTPUT_COLOR;
-            drawRect(rootTargetX - 10, rootTargetY - 9, rootTargetX + 10, rootTargetY + 9, targetColor);
-            renderLabel(rootTarget, rootTargetX - ICON / 2, rootTargetY - ICON / 2, true);
-            // connector from target to the root card (if any).
-            if (!cards.isEmpty()) {
-                Card rootCard = cards.get(0);
-                drawLine(rootTargetX, rootTargetY + 9, rootTargetX, rootCard.y - 9);
-            }
-        }
-
-        int viewTop = (int) (-height / 2.0 / scale - offY) - 40;
-        int viewBottom = (int) (height / 2.0 / scale - offY) + 40;
-        for (Card c : cards) {
-            if (c.y < viewTop || c.y > viewBottom) {
-                continue;
-            }
-            // Catalysts (purple).
-            if (c.catW > 0) {
-                for (int i = 0; i < c.data.catalysts.size(); i++) {
-                    int cx = c.x + c.catLeft + PAD + i * STEP;
-                    drawRect(cx, c.y - 9, cx + ICON, c.y + 9, CATALYST_COLOR);
-                    renderLabel(c.data.catalysts.get(i), cx, c.y - ICON / 2, false);
-                }
-            }
-            // Inputs (green craftable / red raw).
-            if (c.inW > 0) {
-                for (int i = 0; i < c.data.inputs.size(); i++) {
-                    int ix = c.x + c.inLeft + PAD + i * STEP;
-                    int color = c.data.children.get(i).leaf ? LEAF_COLOR : INPUT_COLOR;
-                    drawRect(ix, c.y - 9, ix + ICON, c.y + 9, color);
-                    renderLabel(c.data.inputs.get(i), ix, c.y - ICON / 2, true);
-                }
-            }
-            // White border around the whole card.
-            int left = c.x - c.halfW;
-            int right = left + c.totalW;
-            drawRect(left, c.y - 10, right, c.y - 9, BORDER_COLOR);
-            drawRect(left, c.y + 9, right, c.y + 10, BORDER_COLOR);
-            drawRect(left, c.y - 10, left + 1, c.y + 10, BORDER_COLOR);
-            drawRect(right - 1, c.y - 10, right, c.y + 10, BORDER_COLOR);
-        }
-
-        GlStateManager.popMatrix();
-
-        // Raw material summary (fixed at the bottom, screen space).
-        if (!screenHits.isEmpty()) {
-            drawString(fontRenderer, summaryTitle, summaryTitleX, summaryTitleY + 4, 0xFFCCCCCC);
-            for (Hit h : screenHits) {
-                renderLabel(h.label, h.x, h.y, true);
-            }
-        }
-
-        // Buttons (e.g. the collapse-catalysts toggle in the top-right corner).
-        super.drawScreen(mouseX, mouseY, partialTicks);
-
-        // Tooltip.
-        for (Hit h : screenHits) {
-            if (mouseX >= h.x && mouseX < h.x + ICON && mouseY >= h.y && mouseY < h.y + ICON) {
-                List<String> tip = new ArrayList<>();
-                tip.add(h.label.getDisplayName());
-                h.label.getToolTip(tip, true);
-                drawHoveringText(tip, mouseX, mouseY);
-                return;
-            }
-        }
-        int wx = worldX(mouseX);
-        int wy = worldY(mouseY);
-        for (Hit h : hits) {
-            if (wx >= h.x && wx < h.x + ICON && wy >= h.y && wy < h.y + ICON) {
-                List<String> tip = new ArrayList<>();
-                tip.add(h.label.getDisplayName());
-                h.label.getToolTip(tip, true);
-                drawHoveringText(tip, mouseX, mouseY);
-                break;
-            }
-        }
-    }
-
-    private void renderLabel(ILabel label, int x, int y, boolean showAmount) {
-        Object rep = cachedRep(label);
-        if (rep instanceof ItemStack) {
-            ItemStack stack = (ItemStack) rep;
-            GlStateManager.enableDepth();
-            RenderHelper.enableGUIStandardItemLighting();
-            mc.getRenderItem().renderItemIntoGUI(stack, x, y);
-            RenderHelper.disableStandardItemLighting();
-            GlStateManager.disableDepth();
-            if (showAmount) {
-                String s = label.getAmountString(true);
-                if (!s.isEmpty()) {
-                    drawAmount(s, x, y);
-                }
-            }
-        } else if (rep instanceof FluidStack) {
-            renderFluid((FluidStack) rep, x, y);
-            if (showAmount) {
-                String s = label.getAmountString(true);
-                if (!s.isEmpty()) {
-                    drawAmount(s, x, y);
-                }
-            }
-        }
-    }
-
-    private void drawAmount(String s, int x, int y) {
-        // Amount text at 2/3 scale, bottom-right aligned on the 16x16 icon. The 1px inset
-        // keeps the text (and its shadow) fully inside the icon instead of hanging below it.
-        GlStateManager.pushMatrix();
-        GlStateManager.scale(AMOUNT_SCALE, AMOUNT_SCALE, 1.0f);
-        int tw = fontRenderer.getStringWidth(s);
-        int wx = Math.round((x + ICON - 1) / AMOUNT_SCALE - tw);
-        int wy = Math.round((y + ICON - 1) / AMOUNT_SCALE - 8);
-        fontRenderer.drawStringWithShadow(s, wx, wy, 0xFFFFFF);
-        GlStateManager.popMatrix();
-    }
-
-    private Object cachedRep(ILabel label) {
-        Object rep = repCache.get(label);
-        if (rep == null && !repCache.containsKey(label)) {
-            rep = label.getRepresentation();
-            repCache.put(label, rep);
-        }
-        return rep;
-    }
-
-    private void renderFluid(FluidStack fluid, int x, int y) {
-        TextureAtlasSprite tex = mc.getTextureMapBlocks().getTextureExtry(fluid.getFluid().getStill().toString());
-        if (tex == null) {
-            return;
-        }
-        mc.renderEngine.bindTexture(TextureMap.LOCATION_BLOCKS_TEXTURE);
-        int c = fluid.getFluid().getColor();
-        GlStateManager.color((c >> 16 & 255) / 255f, (c >> 8 & 255) / 255f, (c & 255) / 255f, 1f);
-        drawTexturedModalRect(x, y, tex, ICON, ICON);
-        GlStateManager.color(1f, 1f, 1f, 1f);
-    }
-
-    private void drawLine(int x1, int y1, int x2, int y2) {
-        if (x1 == x2) {
-            drawRect(x1, Math.min(y1, y2), x1 + 1, Math.max(y1, y2), LINE_COLOR);
-        } else {
-            drawRect(Math.min(x1, x2), y1, Math.max(x1, x2), y1 + 1, LINE_COLOR);
-        }
-    }
-
-    // ------------------------------------------------------------------
-    // Interaction
-    // ------------------------------------------------------------------
-
-    private int worldX(int screenX) {
-        return (int) ((screenX - width / 2) / scale - offX);
-    }
-
-    private int worldY(int screenY) {
-        return (int) ((screenY - height / 2) / scale - offY);
-    }
-
-    @Override
-    protected void mouseClicked(int mouseX, int mouseY, int mouseButton) throws IOException {
-        if (mouseButton == 0 && !isOverCatalystButton(mouseX, mouseY)) {
-            boolean shift = isShiftKeyDown();
-            for (Hit h : screenHits) {
-                if (mouseX >= h.x && mouseX < h.x + ICON && mouseY >= h.y && mouseY < h.y + ICON) {
-                    showRecipe(h.label);
-                    return;
-                }
-            }
-            int wx = worldX(mouseX);
-            int wy = worldY(mouseY);
-            for (Hit h : hits) {
-                if (wx >= h.x && wx < h.x + ICON && wy >= h.y && wy < h.y + ICON) {
-                    if (shift && h.recipe != null) {
-                        openRecipeEditor(h.recipe);
-                    } else {
-                        showRecipe(h.label);
-                    }
-                    return;
-                }
-            }
-            dragging = true;
-            lastMouseX = mouseX;
-            lastMouseY = mouseY;
-        }
-        super.mouseClicked(mouseX, mouseY, mouseButton);
-    }
-
-    private void openRecipeEditor(Recipe recipe) {
-        try {
-            GuiRecipe gui = new GuiRecipe();
-            Method fromRecipe = GuiRecipe.class.getDeclaredMethod("fromRecipe", Recipe.class);
-            fromRecipe.setAccessible(true);
-            fromRecipe.invoke(gui, recipe);
-            Method refresh = GuiRecipe.class.getDeclaredMethod("refresh");
-            refresh.setAccessible(true);
-            refresh.invoke(gui);
-            JecaGui.displayGui(true, true, gui);
-        } catch (ReflectiveOperationException | RuntimeException e) {
-            JecaExMod.LOGGER.error("Failed to open the JEC recipe editor", e);
-        }
-    }
-
-    private void showRecipe(ILabel label) {
-        Object rep = cachedRep(label);
-        if (rep != null) {
-            JecaPlugin.runtime.getRecipesGui()
-                    .show(JecaPlugin.runtime.getRecipeRegistry().createFocus(IFocus.Mode.OUTPUT, rep));
-        }
-    }
-
-    @Override
-    protected void mouseClickMove(int mouseX, int mouseY, int clickedMouseButton, long timeSinceLastClick) {
-        if (dragging) {
-            offX += (mouseX - lastMouseX) / scale;
-            offY += (mouseY - lastMouseY) / scale;
-            lastMouseX = mouseX;
-            lastMouseY = mouseY;
-        }
-        super.mouseClickMove(mouseX, mouseY, clickedMouseButton, timeSinceLastClick);
-    }
-
-    @Override
-    protected void mouseReleased(int mouseX, int mouseY, int state) {
-        dragging = false;
-        super.mouseReleased(mouseX, mouseY, state);
-    }
-
-    @Override
-    public void handleMouseInput() throws IOException {
-        int wheel = Mouse.getEventDWheel();
-        if (wheel != 0) {
-            scale = Math.max(0.4f, Math.min(3.0f, scale * (wheel > 0 ? 1.1f : 0.9f)));
-            return;
-        }
-        super.handleMouseInput();
-    }
-
-    @Override
-    protected void keyTyped(char typedChar, int keyCode) throws IOException {
-        if (keyCode == Keyboard.KEY_ESCAPE || keyCode == mc.gameSettings.keyBindInventory.getKeyCode()) {
-            mc.displayGuiScreen(old);
-            return;
-        }
-        super.keyTyped(typedChar, keyCode);
-    }
-
-    @Override
-    public boolean doesGuiPauseGame() {
-        return false;
-    }
-
-    // ------------------------------------------------------------------
-    // Target
-    // ------------------------------------------------------------------
-
-    private static ILabel getTarget() {
-        RecordCraft record = Controller.getRCraft();
-        ILabel latest = record.getLatest();
-        if (latest == ILabel.EMPTY) {
-            return ILabel.EMPTY;
-        }
-        long amount = 1;
-        try {
-            String s = record.amount;
-            if (s != null && !s.isEmpty()) {
-                amount = Long.parseLong(s);
-            }
-        } catch (NumberFormatException ignored) {
-            amount = 1;
-        }
-        return latest.copy().setAmount(amount);
     }
 }

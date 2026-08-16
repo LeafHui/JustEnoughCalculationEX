@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.jecaex.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "jecaex.refmap.json",
+  "client": [
+    "GuiCraftMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
