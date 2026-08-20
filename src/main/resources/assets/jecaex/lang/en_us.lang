@@ -3,3 +3,5 @@ jecaex.gui.tree.empty=Select an item first.
 jecaex.gui.tree.total=Total raw materials:
 jecaex.gui.tree.hide_catalysts=Hide Catalysts
 jecaex.gui.tree.show_catalysts=Show Catalysts
+jecaex.gui.tree.show_as_stacks=Show as Stacks
+jecaex.gui.tree.show_as_counts=Show as Counts

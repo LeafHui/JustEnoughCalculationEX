@@ -54,6 +54,7 @@ public class GuiCraftTree extends GuiScreen {
     private static final int H_SPACING = 6;
     private static final float AMOUNT_SCALE = 2f / 3f;
     private static final int BTN_CATALYSTS = 0;
+    private static final int BTN_STACKS = 1;
 
     private static final int OUTPUT_COLOR = 0x663B82F6; // blue
     private static final int LEAF_COLOR = 0x66C0392B; // red
@@ -84,8 +85,10 @@ public class GuiCraftTree extends GuiScreen {
     private int lastMouseX, lastMouseY;
 
     private boolean showCatalysts = true;
+    private boolean showStackAmounts = false;
     private RecipeTree.TreeNode root;
     private GuiButton catalystButton;
+    private GuiButton stackButton;
 
     public GuiCraftTree(GuiScreen old) {
         this.old = old;
@@ -144,18 +147,25 @@ public class GuiCraftTree extends GuiScreen {
     public void initGui() {
         offY = -height / 3.0;
         layoutRawMaterials();
-        addCatalystButton();
+        addTopButtons();
     }
 
-    private void addCatalystButton() {
+    private void addTopButtons() {
         if (empty) {
             return;
         }
-        String text = I18n.format(showCatalysts
+        String stackText = I18n.format(showStackAmounts
+                ? "jecaex.gui.tree.show_as_counts"
+                : "jecaex.gui.tree.show_as_stacks");
+        int stackW = fontRenderer.getStringWidth(stackText) + 12;
+        stackButton = new GuiButton(BTN_STACKS, width - stackW - 4, 4, stackW, 20, stackText);
+        buttonList.add(stackButton);
+
+        String catalystText = I18n.format(showCatalysts
                 ? "jecaex.gui.tree.hide_catalysts"
                 : "jecaex.gui.tree.show_catalysts");
-        int w = fontRenderer.getStringWidth(text) + 12;
-        catalystButton = new GuiButton(BTN_CATALYSTS, width - w - 4, 4, w, 20, text);
+        int catalystW = fontRenderer.getStringWidth(catalystText) + 12;
+        catalystButton = new GuiButton(BTN_CATALYSTS, width - catalystW - 4, 28, catalystW, 20, catalystText);
         buttonList.add(catalystButton);
     }
 
@@ -167,14 +177,25 @@ public class GuiCraftTree extends GuiScreen {
             offX = 0;
             offY = -height / 3.0;
             buttonList.clear();
-            addCatalystButton();
+            addTopButtons();
+            return;
+        }
+        if (button.id == BTN_STACKS) {
+            showStackAmounts = !showStackAmounts;
+            buttonList.clear();
+            addTopButtons();
             return;
         }
         super.actionPerformed(button);
     }
 
-    private boolean isOverCatalystButton(int mouseX, int mouseY) {
+    private boolean isOverButton(int mouseX, int mouseY) {
         GuiButton b = catalystButton;
+        if (b != null && mouseX >= b.x && mouseX < b.x + b.width
+                && mouseY >= b.y && mouseY < b.y + b.height) {
+            return true;
+        }
+        b = stackButton;
         return b != null && mouseX >= b.x && mouseX < b.x + b.width
                 && mouseY >= b.y && mouseY < b.y + b.height;
     }
@@ -531,7 +552,7 @@ public class GuiCraftTree extends GuiScreen {
             RenderHelper.disableStandardItemLighting();
             GlStateManager.disableDepth();
             if (showAmount) {
-                String s = label.getAmountString(true);
+                String s = formatAmount(label);
                 if (!s.isEmpty()) {
                     drawAmount(s, x, y);
                 }
@@ -539,7 +560,7 @@ public class GuiCraftTree extends GuiScreen {
         } else if (rep instanceof FluidStack) {
             renderFluid((FluidStack) rep, x, y);
             if (showAmount) {
-                String s = label.getAmountString(true);
+                String s = formatAmount(label);
                 if (!s.isEmpty()) {
                     drawAmount(s, x, y);
                 }
@@ -547,16 +568,70 @@ public class GuiCraftTree extends GuiScreen {
         }
     }
 
+    /**
+     * Formats a label's amount for display. Items are shown as "stackSize*n+m" (with the actual
+     * item stack size) when the stack-mode toggle is on; fluids and other cases keep the default
+     * JEC formatting.
+     */
+    private String formatAmount(ILabel label) {
+        if (showStackAmounts && !"fluidStack".equals(label.getIdentifier()) && !label.isPercent()) {
+            Object rep = cachedRep(label);
+            if (rep instanceof ItemStack) {
+                int stackSize = ((ItemStack) rep).getMaxStackSize();
+                long amount = label.getAmount();
+                if (amount > 0 && stackSize > 1) {
+                    long n = amount / stackSize;
+                    long m = amount % stackSize;
+                    if (n == 0) {
+                        return Long.toString(m);
+                    } else if (m == 0) {
+                        return n == 1 ? Long.toString(amount) : stackSize + "*" + n;
+                    } else {
+                        return stackSize + "*" + n + "+" + m;
+                    }
+                }
+            }
+        }
+        return label.getAmountString(true);
+    }
+
     private void drawAmount(String s, int x, int y) {
-        // Amount text at 2/3 scale, bottom-right aligned on the 16x16 icon. The 1px inset
-        // keeps the text (and its shadow) fully inside the icon instead of hanging below it.
+        // Stacked from the bottom-right corner of the 16x16 icon. Wraps into multiple lines
+        // when too wide, and shrinks the scale if even the wrapped block is too tall, so the
+        // number always stays inside the icon without ever truncating digits.
+        List<String> lines = wrapAmount(s);
+        float lineH = fontRenderer.FONT_HEIGHT;
+        float totalH = (lines.size() - 1) * lineH + 8;
+        float scl = Math.min(AMOUNT_SCALE, (ICON - 2) / totalH);
         GlStateManager.pushMatrix();
-        GlStateManager.scale(AMOUNT_SCALE, AMOUNT_SCALE, 1.0f);
-        int tw = fontRenderer.getStringWidth(s);
-        int wx = Math.round((x + ICON - 1) / AMOUNT_SCALE - tw);
-        int wy = Math.round((y + ICON - 1) / AMOUNT_SCALE - 8);
-        fontRenderer.drawStringWithShadow(s, wx, wy, 0xFFFFFF);
+        GlStateManager.scale(scl, scl, 1.0f);
+        int wx = Math.round((x + ICON - 1) / scl);
+        int wy = Math.round((y + ICON - 1) / scl - 8);
+        for (int i = 0; i < lines.size(); i++) {
+            int lw = fontRenderer.getStringWidth(lines.get(i));
+            fontRenderer.drawStringWithShadow(lines.get(i), wx - lw,
+                    wy - Math.round((lines.size() - 1 - i) * lineH), 0xFFFFFF);
+        }
         GlStateManager.popMatrix();
+    }
+
+    private List<String> wrapAmount(String s) {
+        List<String> lines = new ArrayList<>();
+        int maxW = Math.round((ICON - 2) / AMOUNT_SCALE);
+        StringBuilder cur = new StringBuilder();
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            int w = fontRenderer.getCharWidth(c);
+            if (cur.length() > 0 && fontRenderer.getStringWidth(cur.toString()) + w > maxW) {
+                lines.add(cur.toString());
+                cur.setLength(0);
+            }
+            cur.append(c);
+        }
+        if (cur.length() > 0) {
+            lines.add(cur.toString());
+        }
+        return lines;
     }
 
     private Object cachedRep(ILabel label) {
@@ -602,7 +677,7 @@ public class GuiCraftTree extends GuiScreen {
 
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int mouseButton) throws IOException {
-        if (mouseButton == 0 && !isOverCatalystButton(mouseX, mouseY)) {
+        if (mouseButton == 0 && !isOverButton(mouseX, mouseY)) {
             boolean shift = isShiftKeyDown();
             for (Hit h : screenHits) {
                 if (mouseX >= h.x && mouseX < h.x + ICON && mouseY >= h.y && mouseY < h.y + ICON) {

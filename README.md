@@ -8,7 +8,7 @@
 **This project was designed, coded and debugged with AI (LLM) assistance.**
 
 - **modid**: `jecaex`
-- **当前版本 / Version**: `0.2.2`
+- **当前版本 / Version**: `0.3.0`
 - **平台 / Platform**: Minecraft `1.12.2` Forge
 
 ---
@@ -38,9 +38,10 @@ When importing GTCEu machine recipes from JEI/HEI:
 - 底部总原材料汇总（物品与流体）；
 - 平移（拖拽）、缩放（滚轮）、视口裁剪；
 - 折叠/显示催化剂按钮；
+- 以堆叠数显示按钮（物品数量按实际堆叠数显示为 `64*2+1` 形式，流体不受影响）；
 - Shift + 左键配方卡片：打开预填好的 JEC 配方编辑器。
 
-Click the "合成树" button in the JEC crafting calculator to open a full-screen BoM-style recipe tree with pan/zoom, color coding, a bottom raw-material summary and a catalyst show/hide toggle.
+Click the "合成树" button in the JEC crafting calculator to open a full-screen BoM-style recipe tree with pan/zoom, color coding, a bottom raw-material summary, a catalyst show/hide toggle, and a stack-count display toggle (item amounts shown as stacks like `64*2+1`, fluids unaffected).
 
 ---
 
